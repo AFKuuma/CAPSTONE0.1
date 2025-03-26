@@ -1,17 +1,17 @@
 <?php
 session_start();
+include 'db.php'; // Updated to include the correct database connection file
 
-// Enable error reporting for debugging
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// Check if the database connection is established
+if (!$conn) {
+    die("Database connection error. Please try again later.");
+}
 
 // Redirect to home if already logged in
-if (isset($_SESSION['userID'])) {
+if (isset($_SESSION['userID']) && !empty($_SESSION['userID'])) {
     header("Location: home.php");
     exit();
 }
-include 'db.php'; // Updated to include the correct database connection file
 
 // Generate CSRF token if not already set
 if (empty($_SESSION['csrf_token'])) {
@@ -19,7 +19,7 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
-    $userID = htmlspecialchars(trim($_POST['userID']));
+    $userID   = htmlspecialchars(trim($_POST['userID']));
     $password = htmlspecialchars(trim($_POST['password']));
     $csrf_token = $_POST['csrf_token'] ?? '';
 
@@ -29,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     } elseif (empty($userID) || empty($password)) {
         $error = "Both fields are required.";
     } else {
+        // Validate user credentials
         $stmt = $conn->prepare("SELECT Password FROM User WHERE UserID = ?");
         if ($stmt) {
             $stmt->bind_param("s", $userID);
@@ -42,38 +43,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     header("Location: home.php");
                     exit();
                 } else {
-                    $error = "Invalid credentials.";
+                    $error = "Invalid credentials. Please try again.";
                 }
             } else {
-                $error = "No account found.";
+                $error = "No account found with the provided User ID.";
             }
             $stmt->close();
         } else {
-            $error = "Database query failed.";
+            $error = "Database query failed: " . htmlspecialchars($conn->error);
         }
     }
-}
-
-// Display error message if set in session
-if (isset($_SESSION['error'])) {
-    $error = $_SESSION['error'];
-    unset($_SESSION['error']);
 }
 ?>
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Movie Ticket Booking - Login</title>
+    <title>Login</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="form_styles.css"> <!-- New CSS file for styling -->
 </head>
 <body>
     <div class="container">
         <h2>Login</h2>
-        <?php if (isset($_GET['success'])) { echo "<p class='success'>Account created successfully. Please log in.</p>"; } ?>
-        <?php if (isset($_GET['logout'])) { echo "<p class='success'>You have successfully logged out.</p>"; } ?>
         <?php if (isset($error)) { echo "<p class='error'>" . htmlspecialchars($error) . "</p>"; } ?>
-        
         <form method="post" action="">
             <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
             <div class="form-group">
@@ -82,11 +73,9 @@ if (isset($_SESSION['error'])) {
             <div class="form-group">
                 <input type="password" name="password" placeholder="Password" required>
             </div>
-            <div class="form-group">
-                <p>Don't have an account? <a href="create_account.php">Create one here</a>.</p>
-            </div>
             <button type="submit" name="login">Login</button>
         </form>
+        <p>Don't have an account? <a href="create_account.php">Create one</a></p>
     </div>
 </body>
 </html>

@@ -1,116 +1,59 @@
 <?php
 session_start();
+include 'db.php'; // Include database connection
+
 if (!isset($_SESSION['userID'])) {
     header('Location: index.php');
     exit();
 }
 
-include 'db_connect.php';
-
-if (!$conn) {
-    die("Database connection failed: " . mysqli_connect_error());
+// Fetch available movies for booking
+$sql = "SELECT MovieID, Title, Genre, ReleaseDate, Language, Rating FROM Movie";
+$movies = $conn->query($sql);
+if (!$movies) {
+    die("Error fetching movies: " . $conn->error);
 }
 
-// Fetch booked seats
-$sql = "SELECT b.BookingID, m.Title, b.SeatNumber, b.BookingDate 
-        FROM Booking b
-        JOIN Movie m ON b.MovieID = m.MovieID
-        WHERE b.UserID = ?";
-$stmt = $conn->prepare($sql);
-if (!$stmt) {
-    die("Error preparing statement: " . $conn->error);
+// Handle booking form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $movieID = $_POST['movieID'] ?? null;
+    $showtimeID = $_POST['showtimeID'] ?? null;
+    $totalTickets = intval($_POST['totalTickets'] ?? 0);
+    $totalPrice = floatval($_POST['totalPrice'] ?? 0.0);
+    $userID = $_SESSION['userID'];
+    $bookingDate = date('Y-m-d');
+    $status = 1; // Confirmed
+
+    // Validate inputs
+    if ($movieID && $showtimeID && $totalTickets > 0 && $totalPrice > 0) {
+        $bookingID = uniqid(); // Generate a unique booking ID
+
+        $stmt = $conn->prepare("INSERT INTO Booking (BookingID, UserID, ShowtimeID, TotalTickets, TotalPrice, BookingDate, Status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("sssidsi", $bookingID, $userID, $showtimeID, $totalTickets, $totalPrice, $bookingDate, $status);
+            if ($stmt->execute()) {
+                $successMessage = "Booking successful!";
+            } else {
+                $errorMessage = "Error: " . htmlspecialchars($stmt->error);
+            }
+            $stmt->close();
+        } else {
+            $errorMessage = "Database query failed.";
+        }
+    } else {
+        $errorMessage = "Invalid input. Please ensure all fields are filled correctly.";
+    }
 }
-$stmt->bind_param("i", $_SESSION['userID']);
-$stmt->execute();
-$bookings = $stmt->get_result();
-$stmt->close();
 ?>
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Booked Seats</title>
-    <style>
-        /* Enhanced styling for a user-friendly appearance */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f9f9f9;
-        }
-        .sidebar {
-            float: left;
-            width: 25%;
-            background: #4CAF50;
-            color: white;
-            height: 100vh;
-            padding: 30px;
-            font-size: 18px;
-            text-align: center; /* Center-align text */
-        }
-        .sidebar ul {
-            list-style: none;
-            padding: 0;
-        }
-        .sidebar ul li {
-            margin-bottom: 20px;
-        }
-        .sidebar ul li a {
-            color: white;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 20px; /* Larger font size */
-            transition: background-color 0.3s, color 0.3s;
-        }
-        .sidebar ul li a:hover {
-            background-color: #45a049;
-            color: #f9f9f9;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        .content {
-            float: left;
-            width: 70%;
-            padding: 30px;
-            background-color: #ffffff;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            margin: 20px;
-            text-align: center; /* Center-align content */
-        }
-        h2 {
-            color: #4CAF50;
-            font-size: 32px; /* Larger font size */
-            margin-bottom: 20px; /* Add spacing below */
-        }
-        .booking {
-            border: 2px solid #ccc;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 30px; /* Add spacing below */
-            background-color: #f0f8ff;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-        .booking:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
-        }
-        .booking h3 {
-            margin: 0;
-            color: #4CAF50; /* Green color for titles */
-            font-size: 26px; /* Larger font size */
-            margin-bottom: 10px; /* Add spacing below */
-        }
-        .booking p {
-            margin: 10px 0;
-            color: #555;
-            font-size: 18px; /* Larger font size */
-        }
-    </style>
+    <title>Book Seats</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="sidebar">
-        <ul style="list-style:none; padding:0;">
+        <ul>
             <li><a href="home.php">Home</a></li>
             <li><a href="booked.php">Booked Seats</a></li>
             <li><a href="booking.php">Book Seats</a></li>
@@ -118,24 +61,41 @@ $stmt->close();
             <li><a href="logout.php">Logout</a></li>
         </ul>
     </div>
-    
     <div class="content">
-        <h2>Your Booked Seats</h2>
-        <div class="booked-list">
-            <?php
-            if ($bookings->num_rows > 0) {
-                while ($booking = $bookings->fetch_assoc()) {
-                    echo "<div class='booking'>";
-                    echo "<h3>" . htmlspecialchars($booking['Title']) . "</h3>";
-                    echo "<p><strong>Seat Number:</strong> " . htmlspecialchars($booking['SeatNumber']) . "</p>";
-                    echo "<p><strong>Booking Date:</strong> " . htmlspecialchars($booking['BookingDate']) . "</p>";
-                    echo "</div>";
-                }
-            } else {
-                echo "<p>No bookings found.</p>";
+        <h2>Book Your Seats</h2>
+        <?php
+        if (isset($successMessage)) {
+            echo "<p class='success-message'>" . htmlspecialchars($successMessage) . "</p>";
+        }
+        if (isset($errorMessage)) {
+            echo "<p class='error-message'>" . htmlspecialchars($errorMessage) . "</p>";
+        }
+        ?>
+        <?php
+        if ($movies->num_rows > 0) {
+            while ($movie = $movies->fetch_assoc()) {
+                echo "<div class='movie-item'>";
+                echo "<h3>" . htmlspecialchars($movie['Title']) . "</h3>";
+                echo "<p><strong>Genre:</strong> " . htmlspecialchars($movie['Genre']) . "</p>";
+                echo "<p><strong>Release Date:</strong> " . htmlspecialchars($movie['ReleaseDate']) . "</p>";
+                echo "<p><strong>Language:</strong> " . htmlspecialchars($movie['Language']) . "</p>";
+                echo "<p><strong>Rating:</strong> " . htmlspecialchars($movie['Rating']) . "</p>";
+                echo "<form method='POST' action=''>";
+                echo "<input type='hidden' name='movieID' value='" . htmlspecialchars($movie['MovieID']) . "'>";
+                echo "<label for='showtimeID'>Showtime ID:</label>";
+                echo "<input type='text' name='showtimeID' required>";
+                echo "<label for='totalTickets'>Total Tickets:</label>";
+                echo "<input type='number' name='totalTickets' min='1' required>";
+                echo "<label for='totalPrice'>Total Price:</label>";
+                echo "<input type='number' name='totalPrice' step='0.01' min='0.01' required>";
+                echo "<button type='submit'>Book Now</button>";
+                echo "</form>";
+                echo "</div>";
             }
-            ?>
-        </div>
+        } else {
+            echo "<p>No movies available for booking.</p>";
+        }
+        ?>
     </div>
 </body>
 </html>
