@@ -11,7 +11,13 @@ if (isset($_SESSION['userID'])) {
     header("Location: home.php");
     exit();
 }
-include 'db.php'; // Updated to include the correct database connection file
+
+include 'db.php'; // Include the database connection file
+
+// Check if the database connection is established
+if (!$conn) {
+    die("Database connection error. Please try again later.");
+}
 
 // Generate CSRF token if not already set
 if (empty($_SESSION['csrf_token'])) {
@@ -56,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
 // Display error message if set in session
 if (isset($_SESSION['error'])) {
-    $error = $_SESSION['error'];
+    $error = htmlspecialchars($_SESSION['error']);
     unset($_SESSION['error']);
 }
 ?>

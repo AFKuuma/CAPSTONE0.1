@@ -163,11 +163,16 @@ CREATE TABLE `Seat` (
   `TheaterID` varchar(40) NOT NULL,
   `SeatNumber` int(11) NOT NULL,
   `SeatType` varchar(20) NOT NULL,
+  `IsBooked` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0: Available, 1: Booked',
   PRIMARY KEY (`SeatID`),
   KEY `Theater_Seat` (`TheaterID`),
   CONSTRAINT `Theater_Seat` FOREIGN KEY (`TheaterID`) REFERENCES `Theater` (`TheaterID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+-- Ensure the IsBooked column exists in the Seat table
+ALTER TABLE `Seat`
+ADD COLUMN IF NOT EXISTS `IsBooked` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0: Available, 1: Booked';
 
 --
 -- Dumping data for table `Seat`
@@ -188,11 +193,16 @@ DROP TABLE IF EXISTS `Seat_Booking`;
 CREATE TABLE `Seat_Booking` (
   `SeatID` varchar(40) NOT NULL,
   `BookingID` varchar(40) NOT NULL,
+  `BookedBy` varchar(40) DEFAULT NULL COMMENT 'UserID of the person who booked the seat',
   PRIMARY KEY (`SeatID`),
   KEY `Booking_Seat_Booking` (`BookingID`),
   CONSTRAINT `Booking_Seat_Booking` FOREIGN KEY (`BookingID`) REFERENCES `Booking` (`BookingID`),
   CONSTRAINT `Seat_Seat_Booking` FOREIGN KEY (`SeatID`) REFERENCES `Seat` (`SeatID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Ensure no double booking for the same seat and showtime
+ALTER TABLE `Seat_Booking` ADD UNIQUE (`SeatID`, `BookingID`);
+
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -218,6 +228,7 @@ CREATE TABLE `Showtime` (
   `ShowDate` date NOT NULL COMMENT 'Date of the show',
   `StartTime` time NOT NULL COMMENT 'Start time of the movie',
   `EndTime` time NOT NULL COMMENT 'End time of the movie',
+  `AvailableSeats` int(11) NOT NULL COMMENT 'Number of available seats for the show',
   PRIMARY KEY (`ShowtimeID`),
   KEY `Movie_Showtime` (`MovieID`),
   KEY `Theater_Showtime` (`TheaterID`),
@@ -246,6 +257,7 @@ CREATE TABLE `Theater` (
   `TheaterID` varchar(40) NOT NULL,
   `Name` varchar(100) NOT NULL,
   `Location` varchar(255) NOT NULL,
+  `City` varchar(100) NOT NULL COMMENT 'City where the theater is located',
   `TotalSeats` int(11) NOT NULL,
   PRIMARY KEY (`TheaterID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -273,7 +285,7 @@ CREATE TABLE `User` (
   `Email` varchar(100) NOT NULL COMMENT 'User''s email for login',
   `Password` varchar(255) NOT NULL COMMENT 'Encrypted password',
   `Phone` varchar(15) NOT NULL COMMENT 'Contact number',
-  `Role` tinyint(4) NOT NULL COMMENT 'User role (Admin, Customer)',
+  `Role` ENUM('Admin', 'Customer') NOT NULL DEFAULT 'Customer' COMMENT 'User role (Admin, Customer)',
   PRIMARY KEY (`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -291,7 +303,42 @@ UNLOCK TABLES;
 -- Insert default user 'janblaire'
 --
 INSERT INTO `User` (`UserID`, `Name`, `Email`, `Password`, `Phone`, `Role`) 
-VALUES ('janblaire', 'Jan Blaire', 'janblaire@example.com', '$2y$10$eImiTXuWVxfM37uY4JANjQe5xK4Zp1s9aGzFz9eV1K6Q9z9eFzFzG', '1234567890', 1);
+VALUES ('janblaire', 'Jan Blaire', 'janblaire@example.com', '$2y$10$eImiTXuWVxfM37uY4JANjQe5xK4Zp1s9aGzFz9eV1K6Q9z9eFzFzG', '1234567890', 'Admin');
+
+-- Insert default admin user 'admin001'
+INSERT INTO `User` (`UserID`, `Name`, `Email`, `Password`, `Phone`, `Role`) 
+VALUES ('admin001', 'Admin User', 'admin@example.com', '$2y$10$eImiTXuWVxfM37uY4JANjQe5xK4Zp1s9aGzFz9eV1K6Q9z9eFzFzG', '1234567890', 'Admin');
+
+-- Insert default admin account
+INSERT INTO `User` (`UserID`, `Name`, `Email`, `Password`, `Phone`, `Role`) 
+VALUES ('admin', 'Administrator', 'admin@example.com', '$2y$10$eImiTXuWVxfM37uY4JANjQe5xK4Zp1s9aGzFz9eV1K6Q9z9eFzFzG', '1234567890', 'Admin');
+
+-- Insert sample data for theaters
+INSERT INTO `Theater` (`TheaterID`, `Name`, `Location`, `City`, `TotalSeats`) VALUES
+('theater001', 'Cinema One', '123 Main St', 'New York', 200),
+('theater002', 'Cinema Two', '456 Elm St', 'Los Angeles', 150);
+
+-- Insert sample data for showtimes
+INSERT INTO `Showtime` (`ShowtimeID`, `MovieID`, `TheaterID`, `ShowDate`, `StartTime`, `EndTime`, `AvailableSeats`) VALUES
+('showtime001', 'movie001', 'theater001', '2025-03-30', '18:00:00', '20:30:00', 200),
+('showtime002', 'movie002', 'theater002', '2025-03-30', '19:00:00', '21:45:00', 150);
+
+-- Insert sample data for seats
+INSERT INTO `Seat` (`SeatID`, `TheaterID`, `SeatNumber`, `SeatType`, `IsBooked`) VALUES
+('seat001', 'theater001', 1, 'Regular', 0),
+('seat002', 'theater001', 2, 'Regular', 0),
+('seat003', 'theater002', 1, 'VIP', 0),
+('seat004', 'theater002', 2, 'VIP', 0);
+
+-- Add a table to notify admins of new bookings
+CREATE TABLE IF NOT EXISTS `AdminNotifications` (
+  `NotificationID` INT AUTO_INCREMENT PRIMARY KEY,
+  `BookingID` VARCHAR(40) NOT NULL,
+  `Message` TEXT NOT NULL,
+  `IsRead` TINYINT(1) NOT NULL DEFAULT 0,
+  `CreatedAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`BookingID`) REFERENCES `Booking`(`BookingID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
