@@ -19,8 +19,10 @@ if (!$movies) {
     die("An error occurred while fetching movies. Please try again later.");
 }
 
-// Get the pre-selected movieID from the query parameter
+// Get the pre-selected movieID, ticket count, and price from the query parameters
 $selectedMovieID = $_GET['movieID'] ?? null;
+$totalTickets = intval($_GET['totalTickets'] ?? 0);
+$pricePerTicket = floatval($_GET['price'] ?? 0.0);
 
 // Fetch all seats for the grid
 $seatsSql = "SELECT SeatID, SeatNumber, IsBooked FROM Seat WHERE SeatNumber <= 100";
@@ -143,12 +145,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const seats = document.querySelectorAll('.seat.available');
+            const totalTicketsInput = document.querySelector('input[name="totalTickets"]');
+            let selectedSeats = new Set();
+
             seats.forEach(seat => {
                 seat.addEventListener('click', () => {
-                    document.querySelectorAll('.seat').forEach(s => s.classList.remove('selected'));
-                    seat.classList.add('selected');
-                    document.getElementById('seatID').value = seat.dataset.seatId;
+                    const totalTickets = parseInt(totalTicketsInput.value, 10) || 0;
+
+                    if (seat.classList.contains('selected')) {
+                        seat.classList.remove('selected');
+                        selectedSeats.delete(seat.dataset.seatId);
+                    } else if (selectedSeats.size < totalTickets) {
+                        seat.classList.add('selected');
+                        selectedSeats.add(seat.dataset.seatId);
+                    } else {
+                        alert(`You can only select up to ${totalTickets} seats.`);
+                    }
+
+                    // Update hidden input with selected seat IDs
+                    document.getElementById('seatID').value = Array.from(selectedSeats).join(',');
                 });
+            });
+
+            totalTicketsInput.addEventListener('input', () => {
+                // Reset seat selection if ticket count changes
+                selectedSeats.clear();
+                document.querySelectorAll('.seat.selected').forEach(seat => seat.classList.remove('selected'));
+                document.getElementById('seatID').value = '';
+            });
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const totalTicketsInput = document.querySelector('input[name="totalTickets"]');
+            const totalPriceInput = document.querySelector('input[name="totalPrice"]');
+            const pricePerTicket = <?= json_encode($pricePerTicket) ?>;
+
+            // Pre-fill total tickets and calculate total price
+            totalTicketsInput.value = <?= json_encode($totalTickets) ?>;
+            totalPriceInput.value = (<?= json_encode($totalTickets) ?> * pricePerTicket).toFixed(2);
+
+            totalTicketsInput.addEventListener('input', () => {
+                const totalTickets = parseInt(totalTicketsInput.value, 10) || 0;
+                totalPriceInput.value = (totalTickets * pricePerTicket).toFixed(2);
             });
         });
     </script>
@@ -177,6 +216,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </select>
             <label for="showtimeID">Showtime ID:</label>
             <input type="text" name="showtimeID" required>
+            <label for="totalTickets">Total Tickets:</label>
+            <input type="number" name="totalTickets" min="1" required>
             <label for="seatID">Select Seat:</label>
             <input type="hidden" id="seatID" name="seatID" required>
             <div class="seat-grid">
@@ -185,10 +226,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          data-seat-id="<?= $i ?>"></div>
                 <?php endfor; ?>
             </div>
-            <label for="totalTickets">Total Tickets:</label>
-            <input type="number" name="totalTickets" min="1" required>
-            <label for="totalPrice">Total Price:</label>
-            <input type="number" name="totalPrice" step="0.01" min="0.01" required>
+            <label for="totalPrice">Total Price (₱):</label>
+            <input type="number" name="totalPrice" step="0.01" min="0.01" readonly required>
             <button type="submit">Book Now</button>
         </form>
     </div>

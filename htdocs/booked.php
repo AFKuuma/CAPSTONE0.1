@@ -2,100 +2,81 @@
 session_start();
 include 'db.php'; // Include database connection
 
-// Enable error logging for debugging (disable in production)
+// Enable error reporting temporarily for debugging
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Redirect to login if user is not authenticated
+// Check if the user is logged in
 if (!isset($_SESSION['userID'])) {
     header('Location: index.php');
     exit();
 }
 
-// Check if database connection is valid
-if (!isset($conn) || $conn->connect_error) {
-    error_log("Database connection failed: " . $conn->connect_error);
-    die("Database connection failed. Please try again later.");
+// Ensure $conn is defined and valid
+if (!isset($conn)) {
+    die("Database connection is not initialized. Please check your database configuration.");
 }
 
-$userID = $_SESSION['userID'];
-
-// Check if the Booking table exists
-$tableCheck = $conn->query("SHOW TABLES LIKE 'Booking'");
-if ($tableCheck->num_rows == 0) {
-    die("The Booking table does not exist. Please contact the administrator.");
+if ($conn->connect_error) {
+    die("Database connection failed: " . $conn->connect_error);
 }
 
-// Fetch booked seats for the logged-in user
-$seatsSql = "
-    SELECT Seat.SeatNumber, Seat.IsBooked
-    FROM Seat
-    LEFT JOIN Seat_Booking ON Seat.SeatID = Seat_Booking.SeatID
-    LEFT JOIN Booking ON Seat_Booking.BookingID = Booking.BookingID
-    WHERE Booking.UserID = ? OR Seat.IsBooked = 1
-";
-$stmt = $conn->prepare($seatsSql);
-if (!$stmt) {
-    error_log("Failed to prepare statement: " . $conn->error);
-    die("An error occurred while fetching your booked seats. Please try again later.");
-}
-$stmt->bind_param("s", $userID);
-$stmt->execute();
-$result = $stmt->get_result();
-
-// Organize seats into a grid
-$seatGrid = [];
-while ($seat = $result->fetch_assoc()) {
-    $seatGrid[$seat['SeatNumber']] = $seat['IsBooked'];
-}
-
-// Handle delete request
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deleteBookingID'])) {
-    $deleteBookingID = $_POST['deleteBookingID'];
-
-    // Ensure the booking belongs to the logged-in user
-    $deleteStmt = $conn->prepare("DELETE FROM Booking WHERE BookingID = ? AND UserID = ?");
-    $deleteStmt->bind_param("ss", $deleteBookingID, $userID);
-    $deleteStmt->execute();
-
-    if ($deleteStmt->affected_rows > 0) {
-        header("Location: booked.php");
-        exit();
-    } else {
-        $errorMessage = "Failed to delete booking. Please try again.";
-    }
+// Fetch movies
+$sql = "SELECT MovieID, Title FROM Movie";
+$movies = $conn->query($sql);
+if (!$movies) {
+    error_log("Error fetching movies: " . $conn->error);
+    die("An error occurred while fetching movies. Please try again later.");
 }
 ?>
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Booked Seats</title>
+    <title>Movies</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        .seat-grid {
-            display: grid;
-            grid-template-columns: repeat(10, 1fr);
-            gap: 5px;
-            margin: 20px 0;
+        .movies-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
         }
-        .seat {
-            width: 30px;
-            height: 30px;
+        .movie-item {
             border: 1px solid #ccc;
-            border-radius: 3px;
-            cursor: pointer;
-            transition: background-color 0.3s ease, transform 0.2s ease;
+            padding: 15px;
+            border-radius: 5px;
+            width: 300px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            background-color: #f9f9f9; /* Default background color */
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .seat.available {
-            background-color: #4CAF50;
+        .movie-item:nth-child(odd) {
+            background-color: #e3f2fd; /* Light blue for odd items */
         }
-        .seat.booked {
-            background-color: rgba(0, 0, 0, 0.5);
-            cursor: not-allowed;
+        .movie-item:nth-child(even) {
+            background-color: #fce4ec; /* Light pink for even items */
         }
-        .seat:hover:not(.booked) {
-            background-color: #45a049;
-            transform: scale(1.1);
+        .movie-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .movie-item h3 {
+            margin: 0 0 10px;
+        }
+        .movie-item p {
+            margin: 5px 0;
+        }
+        .btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 12px;
+            background-color: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .btn:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
@@ -110,13 +91,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deleteBookingID'])) {
         </ul>
     </div>
     <div class="content">
-        <h2>Your Booked Seats</h2>
-        <?php if (isset($errorMessage)) echo "<p class='error-message'>" . htmlspecialchars($errorMessage) . "</p>"; ?>
-        <div class="seat-grid">
-            <?php for ($i = 1; $i <= 100; $i++): ?>
-                <div class="seat <?= isset($seatGrid[$i]) && $seatGrid[$i] ? 'booked' : 'available' ?>"></div>
-            <?php endfor; ?>
-        </div>
+        <h2>Available Movies</h2>
+        <?php
+        if ($movies->num_rows > 0) {
+            echo "<div class='movies-container'>";
+            while ($movie = $movies->fetch_assoc()) {
+                echo "<div class='movie-item'>";
+                echo "<h3>" . htmlspecialchars($movie['Title']) . "</h3>";
+                echo "<form action='booking.php' method='GET'>";
+                echo "<input type='hidden' name='movieID' value='" . htmlspecialchars($movie['MovieID']) . "'>";
+                echo "<label for='ticketCount'>Number of Tickets:</label>";
+                echo "<input type='number' id='ticketCount' name='ticketCount' min='1' max='10' required>";
+                echo "<button type='submit' class='btn'>Book Now</button>";
+                echo "</form>";
+                echo "</div>";
+            }
+            echo "</div>";
+        } else {
+            echo "<p>No movies available.</p>";
+        }
+        ?>
     </div>
 </body>
 </html>

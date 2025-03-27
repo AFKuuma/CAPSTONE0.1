@@ -39,6 +39,8 @@ if (!isset($_SESSION['userID'])) { // Redirect to login.php if not logged in
             border-radius: 8px 8px 0 0;
         }
         .header h1 {
+            color: #ffffff;
+
             margin: 0;
             font-size: 2.5rem;
         }
@@ -67,7 +69,7 @@ if (!isset($_SESSION['userID'])) { // Redirect to login.php if not logged in
         .quick-links h2 {
             text-align: center;
             margin-bottom: 1rem;
-            color: #4CAF50;
+            color:rgb(25, 27, 25);
         }
         .links-list {
             list-style: none;
@@ -79,17 +81,17 @@ if (!isset($_SESSION['userID'])) { // Redirect to login.php if not logged in
         }
         .link-item {
             text-decoration: none;
-            color: #4CAF50;
+            color:rgb(22, 36, 23);
             font-weight: bold;
             display: block;
             text-align: center;
             padding: 0.5rem;
-            border: 1px solid #4CAF50;
+            border: 1px solidrgb(255, 255, 255);
             border-radius: 5px;
             transition: background-color 0.3s, color 0.3s;
         }
         .link-item:hover {
-            background-color: #4CAF50;
+            background-color:rgb(17, 19, 17);
             color: white;
         }
     </style>

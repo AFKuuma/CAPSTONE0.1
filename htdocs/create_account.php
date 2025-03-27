@@ -12,7 +12,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_account'])) {
     $email    = htmlspecialchars(trim($_POST['email']));
     $password = htmlspecialchars(trim($_POST['password']));
     $phone    = htmlspecialchars(trim($_POST['phone']));
-    $role     = 'Customer'; // Default role is Customer
+    $roleMapping = [
+        'Customer' => 1, // Map 'Customer' to integer 1
+        'Admin' => 2     // Example: Map 'Admin' to integer 2
+    ];
+    $role = $roleMapping['Customer']; // Default role is Customer (integer 1)
 
     // Validate input
     if (empty($userID) || empty($name) || empty($email) || empty($password) || empty($phone)) {
@@ -25,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_account'])) {
         // Insert user into the database
         $stmt = $conn->prepare("INSERT INTO User (UserID, Name, Email, Password, Phone, Role) VALUES (?, ?, ?, ?, ?, ?)");
         if ($stmt) {
-            $stmt->bind_param("ssssss", $userID, $name, $email, $hashedPassword, $phone, $role);
+            $stmt->bind_param("sssssi", $userID, $name, $email, $hashedPassword, $phone, $role); // 'i' for integer role
             try {
                 $stmt->execute();
                 $_SESSION['userID'] = $userID; // Set session user ID
@@ -36,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_account'])) {
                 if ($e->getCode() === 1062) { // Duplicate entry error
                     $error = "User ID or email already exists. Please choose a different one.";
                 } else {
-                    $error = "Failed to create account. Please try again.";
+                    $error = "Failed to create account. Error: " . $e->getMessage(); // Log detailed error
                 }
             }
             $stmt->close();

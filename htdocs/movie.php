@@ -2,24 +2,40 @@
 session_start();
 include 'db.php'; // Include database connection
 
-// Disable error display in production
-error_reporting(0);
-ini_set('display_errors', 0);
+// Enable error reporting temporarily for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
+// Check if the user is logged in
 if (!isset($_SESSION['userID'])) {
     header('Location: index.php');
     exit();
 }
 
-// Check if $conn is defined and valid
-if (!isset($conn) || $conn->connect_error) {
-    die("Database connection failed. Please try again later.");
+// Validate database connection
+if (!isset($conn)) {
+    error_log("Database connection is not initialized.");
+    die("Database connection is not initialized. Please check your database configuration.");
 }
 
-// Fetch movies
-$movies = $conn->query("SELECT * FROM Movie");
+if ($conn->connect_error) {
+    error_log("Database connection failed: " . $conn->connect_error);
+    die("Database connection failed: " . $conn->connect_error);
+}
+
+// Fetch movies from the database using prepared statements
+$sql = "SELECT MovieID, Title FROM Movie"; // Removed 'Image' column
+$stmt = $conn->prepare($sql);
+if (!$stmt) {
+    error_log("Error preparing statement: " . $conn->error);
+    die("An error occurred while preparing the query. Please try again later.");
+}
+
+$stmt->execute();
+$movies = $stmt->get_result();
 if (!$movies) {
-    die("Error fetching movies. Please try again later.");
+    error_log("Error fetching movies: " . $conn->error);
+    die("An error occurred while fetching movies. Please try again later.");
 }
 ?>
 <!DOCTYPE html>
@@ -55,9 +71,6 @@ if (!$movies) {
         .movie-item h3 {
             margin: 0 0 10px;
         }
-        .movie-item p {
-            margin: 5px 0;
-        }
         .btn {
             display: inline-block;
             margin-top: 10px;
@@ -91,13 +104,12 @@ if (!$movies) {
             while ($movie = $movies->fetch_assoc()) {
                 echo "<div class='movie-item'>";
                 echo "<h3>" . htmlspecialchars($movie['Title']) . "</h3>";
-                echo "<p>" . htmlspecialchars($movie['Description']) . "</p>";
-                echo "<p><strong>Genre:</strong> " . htmlspecialchars($movie['Genre']) . "</p>";
-                echo "<p><strong>Duration:</strong> " . htmlspecialchars($movie['Duration']) . " mins</p>";
-                echo "<p><strong>Release Date:</strong> " . htmlspecialchars($movie['ReleaseDate']) . "</p>";
-                echo "<p><strong>Language:</strong> " . htmlspecialchars($movie['Language']) . "</p>";
-                echo "<p><strong>Rating:</strong> " . htmlspecialchars($movie['Rating']) . "/10</p>";
-                echo "<a href='booking.php?movieID=" . htmlspecialchars($movie['MovieID']) . "' class='btn'>Book Now</a>";
+                echo "<form action='booking.php' method='GET'>";
+                echo "<input type='hidden' name='movieID' value='" . htmlspecialchars($movie['MovieID']) . "'>";
+                echo "<label for='ticketCount'>Number of Tickets:</label>";
+                echo "<input type='number' id='ticketCount' name='ticketCount' min='1' max='10' required>";
+                echo "<button type='submit' class='btn'>Book Now</button>";
+                echo "</form>";
                 echo "</div>";
             }
             echo "</div>";

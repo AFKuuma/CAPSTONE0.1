@@ -288,7 +288,17 @@ CREATE TABLE `User` (
   `Role` ENUM('Admin', 'Customer') NOT NULL DEFAULT 'Customer' COMMENT 'User role (Admin, Customer)',
   PRIMARY KEY (`UserID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+-- Ensure the User table has unique constraints on UserID and Email
+ALTER TABLE `User`
+ADD UNIQUE (`UserID`),
+ADD UNIQUE (`Email`);
+
+-- Update the User table to ensure Role is an ENUM type
+ALTER TABLE `User`
+MODIFY COLUMN `Role` ENUM('Admin', 'Customer') NOT NULL DEFAULT 'Customer';
 
 --
 -- Dumping data for table `User`
